@@ -1,0 +1,67 @@
+[project]
+name = 'pip-purger'
+requires-python = ">=3.10"
+version = '0.0.1'
+
+dependencies = [
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pyright",
+    "ruff",
+]
+
+[tool.pyright]
+reportUnsupportedDunderAll = 'none'
+reportImplicitOverride = true
+pythonVersion = '3.10'
+exclude = ['.git', '.idea', '.mypy_cache', '.venv', '__pycache__', 'venv']
+
+[tool.ruff]
+line-length = 99
+target-version = "py310"
+select = ["E4","E7", "E9", "F"]
+extend-select = [
+    "A",  # prevent using keywords that clobber python builtins
+    "B",  # bugbear: security warnings
+    "E501",  # line length
+    "ISC",  # implicit string concatenation
+#    "UP",  # alert you when better syntax is available in your python version
+]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+exclude = ['.git', '.idea', '.mypy_cache', '.venv', '__pycache__', 'venv']
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.per-file-ignores]
+
+[tool.black]
+line-length = 99
+target-version = ['py310', 'py311', 'py312', 'py313']
+preview = true
+include = '\.pyi?$'
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.idea
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | __pycache__
+    | buck-out
+    | build
+    | dist
+    | venv
+  )/
+)
+'''
