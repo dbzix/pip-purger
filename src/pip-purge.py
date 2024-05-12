@@ -5,8 +5,9 @@ import signal
 import subprocess
 import sys
 from subprocess import CompletedProcess, SubprocessError
-from typing import Iterable, NamedTuple
+from typing import Any, NamedTuple
 
+_PKG_NAME = "Name:"
 _REQUIRES = "Requires:"
 _REQUIRED_BY = "Required-by:"
 
@@ -18,6 +19,7 @@ _NO_COLOR = "\x1b[0m"
 
 
 class PackageInfo(NamedTuple):
+    package_name: str
     requires: set[str]
     required_by: set[str]
 
@@ -40,7 +42,7 @@ def process_arguments() -> str:
     return args.package
 
 
-def find_removable_dependencies(package: str) -> Iterable[str]:
+def find_removable_dependencies(package: str) -> list[str]:
     """Check specified package for whitelist and possible errors,
     then search for all removable dependencies and return them as an iterable.
     """
@@ -49,13 +51,14 @@ def find_removable_dependencies(package: str) -> Iterable[str]:
         exit(0)
 
     try:
-        package_info = get_package_info(package)
+        # support removal of only single package at the moment
+        package_info = get_package_infos(package)[0]
     except PackageCheckError as ex:
         print(ex, file=sys.stderr)
         sys.exit(1)
 
     if package_info.required_by:
-        print(f"Package '{package}' is required by '{', '.join(package_info.required_by)}'.")
+        print(f"Package '{package}' is required by: {', '.join(package_info.required_by)}.")
         print(
             f"{_GRAY_COLOR}"
             f"You may run 'pip list --not-required'"
@@ -65,30 +68,46 @@ def find_removable_dependencies(package: str) -> Iterable[str]:
         exit(1)
 
     removables = {package}
-    for dependency in package_info.requires:
+    dependencies = package_info.requires - set(_WHITELIST)  # exclude whitelisted dependencies
+    if dependencies:
+        print(f"Gathering '{package}' dependencies...")
         # update removables recursively
-        _check_dependencies(dependency, removables)
+        _check_dependencies(*dependencies, removables=removables)
 
     return sorted(removables - {package})
 
 
-def get_package_info(package: str) -> PackageInfo:
-    """Get package information for the specified package."""
-    pip_process = _run_pip_command("show", package)
+def get_package_infos(*packages: str) -> list[PackageInfo]:
+    """Get and return package information for the specified packages."""
+    pip_process = _run_pip_command("show", *packages)
     pip_output = pip_process.stdout
     if not pip_output:
-        raise PackageCheckError(pip_process.stderr.decode().rstrip("\n"))
+        raise PackageCheckError(pip_process.stderr.rstrip())
 
-    requires_str, required_by_str = [
-        dependency.strip()
-        for dependency in bytes.decode(pip_output).split("\n")
-        if any(dependency.strip().startswith(substr) for substr in (_REQUIRES, _REQUIRED_BY))
+    package_summaries = (package for package in pip_output.split("\n---\n"))
+    package_infos_str = (
+        (
+            line.strip()
+            for line in package_summary.splitlines()
+            if any(
+                line.strip().startswith(prefix) for prefix in (_PKG_NAME, _REQUIRES, _REQUIRED_BY)
+            )
+        )
+        for package_summary in package_summaries
+    )
+    return [
+        PackageInfo(
+            _parse_package_name(package_name),
+            _parse_requires(requires_str),
+            _parse_required_by(required_by_str),
+        )
+        for package_name, requires_str, required_by_str in package_infos_str
     ]
 
-    return PackageInfo(
-        _parse_requires(requires_str),
-        _parse_required_by(required_by_str),
-    )
+
+def _parse_package_name(package_name_str: str) -> str:
+    """Parse 'Name: ...' string in the 'pip show ...' output for a package."""
+    return package_name_str.lstrip(_PKG_NAME).strip().lower()
 
 
 def _parse_requires(requires_str: str) -> set[str]:
@@ -103,28 +122,32 @@ def _parse_required_by(required_by_str: str) -> set[str]:
     return set() if required_by == "" else set(str.split(required_by.lower(), ", "))
 
 
-def _check_dependencies(package: str, removables: set[str]) -> None:
-    """Recursively check package and all its dependencies for removable dependencies.
+def _check_dependencies(*packages: str, removables: set[str]) -> None:
+    """Recursively check packages and all their dependencies for removable ones.
     Put removable dependencies and their removable sub-dependencies into `removables`.
-    """
-    if package in _WHITELIST:
-        return
 
+    Package is removable only when it is needed by requested packages or by packages
+    in `removables`, and nowhere else. Otherwise, the package is not removable.
+    """
     try:
-        package_info = get_package_info(package)
+        package_infos = get_package_infos(*packages)
     except PackageCheckError as ex:
         print(ex, file=sys.stderr)
         sys.exit(1)
 
-    if not (package_info.required_by - removables):
-        # current package is not required anywhere else, but only by our removables
-        removables.add(package)
+    sub_dependencies = set()
+    for package_info in package_infos:
+        if not (package_info.required_by - removables):
+            # current package is not required anywhere else, but only by our removables
+            removables.add(package_info.package_name)
+            sub_dependencies.update(package_info.requires)
 
-    for dependency in package_info.requires:
-        _check_dependencies(dependency, removables)
+    sub_dependencies -= set(_WHITELIST)  # exclude whitelisted sub-dependencies
+    if sub_dependencies:
+        _check_dependencies(*sub_dependencies, removables=removables)
 
 
-def uninstall(package: str, dependencies: Iterable[str]) -> None:
+def uninstall(package: str, *dependencies: str) -> None:
     """Uninstall package with its dependencies."""
     print(f"Package '{package}' will be uninstalled", end="")
     print(f" with its dependencies: {', '.join(dependencies)}." if dependencies else ".")
@@ -141,21 +164,22 @@ def confirm(prompt: str) -> bool:
 
 
 def _run_pip_command(
-    pip_command: str, *arguments: Iterable[str], capture_output: bool = True
-) -> CompletedProcess[bytes]:
+    pip_command: str, *arguments: str, capture_output: bool = True
+) -> CompletedProcess[str]:
     """Run pip command with the arguments provided.
     If `capture_output` flag is set to `True`, then sub-process output will be encapsulated into
     the return value.
     Otherwise, `stdout` and `stderr` of sub-process will be both re-directed to `sys.stdout`.
     """
-    output_args = (
-        {"capture_output": capture_output}
-        if capture_output
-        else {"stdout": sys.stdout, "stderr": sys.stdout}
+    # print(f"Executing: '{pip_command}' with arguments: {arguments}")  # for debug purposes
+    output_args: dict[str, Any] = (
+        {} if capture_output else {"stdout": sys.stdout, "stderr": sys.stdout}
     )
     try:
         return subprocess.run(
             [sys.executable, "-m", "pip", pip_command, *arguments],
+            text=True,
+            capture_output=capture_output,
             **output_args,
         )
     except SubprocessError as ex:
@@ -174,7 +198,7 @@ def main():
 
     package_name = process_arguments()
     package_dependencies = find_removable_dependencies(package_name)
-    uninstall(package_name, package_dependencies)
+    uninstall(package_name, *package_dependencies)
 
 
 if __name__ == "__main__":
