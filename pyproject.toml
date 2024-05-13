@@ -20,9 +20,15 @@ reportImplicitOverride = true
 pythonVersion = '3.10'
 exclude = ['.git', '.idea', '.mypy_cache', '.venv', '__pycache__', 'venv']
 
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.ruff]
 line-length = 99
 target-version = "py310"
+exclude = ['.git', '.idea', '.mypy_cache', '.venv', '__pycache__', 'venv']
+
+[tool.ruff.lint]
 select = ["E4","E7", "E9", "F"]
 extend-select = [
     "A",  # prevent using keywords that clobber python builtins
@@ -34,12 +40,8 @@ extend-select = [
 ignore = []
 fixable = ["ALL"]
 unfixable = []
-exclude = ['.git', '.idea', '.mypy_cache', '.venv', '__pycache__', 'venv']
 
-[tool.ruff.format]
-quote-style = "double"
-
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 
 [tool.black]
 line-length = 99
