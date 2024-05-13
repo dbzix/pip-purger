@@ -5,7 +5,7 @@ import signal
 import subprocess
 import sys
 from subprocess import CompletedProcess, SubprocessError
-from typing import Any, NamedTuple
+from typing import Any, Iterable, NamedTuple
 
 _PKG_NAME = "Name:"
 _REQUIRES = "Requires:"
@@ -42,13 +42,18 @@ def process_arguments() -> str:
     return args.package
 
 
-def find_removable_dependencies(package: str) -> list[str]:
-    """Check specified package for whitelist and possible errors,
-    then search for all removable dependencies and return them as an iterable.
+def _list_packages(packages: Iterable[str]) -> str:
+    """List packages separated by comma."""
+    return ", ".join(packages)
+
+
+def _check_root_package(package: str) -> PackageInfo:
+    """Check root package for whitelist and dependent packages.
+    Return package info object in case of successful checks.
     """
     if package in _WHITELIST:
-        print(f"Use native 'pip' command to remove following packages: {', '.join(_WHITELIST)}")
-        exit(0)
+        print(f"Use 'pip' command to remove following packages: {_list_packages(_WHITELIST)}")
+        sys.exit(0)
 
     try:
         # support removal of only single package at the moment
@@ -58,14 +63,21 @@ def find_removable_dependencies(package: str) -> list[str]:
         sys.exit(1)
 
     if package_info.required_by:
-        print(f"Package '{package}' is required by: {', '.join(package_info.required_by)}.")
+        print(f"Package '{package}' is required by: {_list_packages(package_info.required_by)}.")
         print(
             f"{_GRAY_COLOR}"
             f"You may run 'pip list --not-required'"
             f" to list packages that are not dependencies of installed packages."
             f"{_NO_COLOR}"
         )
-        exit(1)
+        sys.exit(0)
+
+    return package_info
+
+
+def find_removable_dependencies(package: str) -> list[str]:
+    """Search for all removable dependencies and return them as an iterable."""
+    package_info = _check_root_package(package)
 
     removables = {package}
     dependencies = package_info.requires - set(_WHITELIST)  # exclude whitelisted dependencies
@@ -150,7 +162,7 @@ def _check_dependencies(*packages: str, removables: set[str]) -> None:
 def uninstall(package: str, *dependencies: str) -> None:
     """Uninstall package with its dependencies."""
     print(f"Package '{package}' will be uninstalled", end="")
-    print(f" with its dependencies: {', '.join(dependencies)}." if dependencies else ".")
+    print(f" with its dependencies: {_list_packages(dependencies)}." if dependencies else ".")
 
     if not confirm("Proceed (y/N)? "):
         return
@@ -192,9 +204,14 @@ def _sigint_handler(*_):
     sys.exit(0)
 
 
-def main():
+def _setup_signal_handlers() -> None:
+    """Activate signal handlers for SIGINT and SIGQUIT."""
     signal.signal(signal.SIGINT, _sigint_handler)
     signal.signal(signal.SIGQUIT, _sigint_handler)
+
+
+def main():
+    _setup_signal_handlers()
 
     package_name = process_arguments()
     package_dependencies = find_removable_dependencies(package_name)
