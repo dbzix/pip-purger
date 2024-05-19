@@ -52,11 +52,11 @@ $ echo $PATH | tr ":" "\n"
 Cannot find? Fix it:
 
 ```bash
-$ cat .profile
+$ cat .bashrc
 # ...
 # ...
 # ...
-# set PATH so it includes user's private bin if it exists
+# modify PATH to include user's local binaries directory if it exists
 if [ -d "$HOME/.local/bin" ] ; then
   PATH="$HOME/.local/bin:$PATH"
 fi
@@ -92,7 +92,7 @@ Uninstalling Werkzeug-3.0.3:
 > **Note**: Remember to always use [virtual environments](https://realpython.com/python-virtual-environments-a-primer/)!
 
 ## Do you like Pip Purger?
-Please, donate:
+Feel free to support my work:
 
 | Cryptocurrency | Address |
 | --- | --- |
