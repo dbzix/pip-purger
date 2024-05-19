@@ -9,29 +9,59 @@ Struggle no more!
 
 ## Installation
 
-Clone the project
+Clone the project:
 
 ```bash
   $ git clone https://github.com/dbzix/pip-purger
 ```
 
-Go to the project directory
+Create a symlink to the executable in your private `bin` directory:
 
 ```bash
-  $ cd path/to/pip-purger
+  $ ln -s $(realpath -s pip-purger/src/pip-purge.py) ~/.local/bin/pippurge
 ```
 
-Make pip-purger.py executable
+Test it:
+```bash
+$ pippurge 
+usage: pippurge <package>
+pippurge: error: the following arguments are required: package
+```
+
+<details>
+<summary>Doesn't work?</summary>
+
+You ran it, but it doesn't work:
 
 ```bash
-  $ chmod +x src/pip-purger.py
+$ pippurge
+pippurge: command not found
 ```
 
-Create shared symlink to the executable
+Ensure that your *shell* puts your private `bin` directory into the `PATH` variable:
 
 ```bash
-  $ ln -s $(realpath -s src/pip-purge.py) ~/.local/bin/pippurge
+$ echo $PATH | tr ":" "\n"
+# ...
+# ...
+/home/username/.local/bin
+# ...
+# ...
 ```
+
+Cannot find? Fix it:
+
+```bash
+$ cat .profile
+# ...
+# ...
+# ...
+# set PATH so it includes user's private bin if it exists
+if [ -d "$HOME/.local/bin" ] ; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+```
+</details>
 
 ## Usage
 ```
@@ -58,3 +88,15 @@ Found existing installation: Werkzeug 3.0.3
 Uninstalling Werkzeug-3.0.3:
   Successfully uninstalled Werkzeug-3.0.3
 ```
+
+> **Note**: Remember to always use [virtual environments](https://realpython.com/python-virtual-environments-a-primer/)!
+
+## Do you like Pip Purger?
+Please, donate:
+
+| Cryptocurrency | Address |
+| --- | --- |
+| Bitcoin (BTC) | bc1qwf90w004z04v39emd3jj8q4ev4rdna739ecqj5 |
+| Ethereum (ETH)| 0xED726ADA8d6A4f908de77f689D918039b03a698C |
+| Ripple (XRP) |rH8CFA1QVaijiMBaL9FgbpTzu2rYsu3FgB |
+| TON / USDT on TON | UQCVsW7ygTvQWmf8xRwMST7AdfDzNxwrw0CYkThEfhA5Xsk6 |
